@@ -941,12 +941,12 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
     timeSection = `${dayName} ${hours}:${minutes}:${seconds} WIB`
   }
 
-  // Promo status di samping waktu
+  // Promo status di samping waktu (icon berbeda dari status harga)
   let promoSection = ''
   if (promoStatus === 'ON') {
-    promoSection = ' ✅ ON'
+    promoSection = ' 🟢 ON'
   } else if (promoStatus === 'OFF') {
-    promoSection = ' ❌ OFF'
+    promoSection = ' 🔴 OFF'
   }
 
   let headerSection = ''

@@ -1181,51 +1181,59 @@ async function doPromoBroadcast() {
       pushLog(`🎁 Status: ${cachedPromoStatus} → ${currentStatus}`)
     }
 
-    // 🚨 ALERT saat OFF → ON: Kirim notifikasi dengan @tag ke semua subscriber
+    // Update status dulu sebelum kirim pesan
+    cachedPromoStatus = currentStatus
+
+    // 🚨 ALERT saat OFF → ON: Kirim pesan harga dengan @tag ke semua subscriber
     if (statusChangedToOn && subscriptions.size > 0) {
-      pushLog(`🚨 PROMO ON! Sending alerts to ${subscriptions.size} subscribers...`)
+      pushLog(`🚨 PROMO ON! Sending price message with @tag to ${subscriptions.size} subscribers...`)
 
-      for (const chatId of subscriptions) {
-        try {
-          const isGroup = chatId.endsWith('@g.us')
-          let mentions = []
+      try {
+        // Fetch harga terkini untuk pesan
+        const treasuryData = await fetchTreasury()
+        const usdRate = cachedMarketData.usdIdr?.rate || null
 
-          if (isGroup) {
-            // Get semua member grup untuk @mention
-            try {
-              const groupMetadata = await sock.groupMetadata(chatId)
-              mentions = groupMetadata.participants.map(p => p.id)
-              pushLog(`👥 Got ${mentions.length} participants from ${chatId.substring(0, 15)}`)
-            } catch (metaErr) {
-              pushLog(`⚠️ Failed to get group metadata: ${metaErr.message}`)
-            }
+        // Format pesan harga dengan status ON
+        const message = formatMessage(
+          treasuryData,
+          usdRate,
+          cachedMarketData.xauUsd,
+          null, // no price change
+          cachedMarketData.economicEvents,
+          currentStatus // 'ON'
+        )
 
-            // Kirim 3x alert dengan @mention
-            const alertMsg = '🚨🚨🚨 PROMO ON! 🚨🚨🚨'
-            for (let i = 0; i < 3; i++) {
+        for (const chatId of subscriptions) {
+          try {
+            const isGroup = chatId.endsWith('@g.us')
+            let mentions = []
+
+            if (isGroup) {
+              // Get semua member grup untuk @mention
               try {
-                await sock.sendMessage(chatId, {
-                  text: alertMsg,
-                  mentions: mentions
-                })
-                await new Promise(r => setTimeout(r, 500))
-              } catch (alertErr) {
-                pushLog(`⚠️ Alert ${i+1} failed: ${alertErr.message}`)
+                const groupMetadata = await sock.groupMetadata(chatId)
+                mentions = groupMetadata.participants.map(p => p.id)
+                pushLog(`👥 Got ${mentions.length} participants from ${chatId.substring(0, 15)}`)
+              } catch (metaErr) {
+                pushLog(`⚠️ Failed to get group metadata: ${metaErr.message}`)
               }
             }
-            pushLog(`📢 Sent 3 alerts with @mentions to ${chatId.substring(0, 15)}`)
-          } else {
-            // Chat pribadi: kirim 1x saja
-            await sock.sendMessage(chatId, { text: '🚨🚨🚨 PROMO ON! 🚨🚨🚨' })
-          }
 
-        } catch (e) {
-          pushLog(`❌ Failed to send alert to ${chatId}: ${e.message}`)
+            // Kirim pesan harga dengan @mention
+            await sock.sendMessage(chatId, {
+              text: message,
+              mentions: mentions
+            })
+            pushLog(`📢 Sent price message with @tag to ${chatId.substring(0, 15)}`)
+
+          } catch (e) {
+            pushLog(`❌ Failed to send to ${chatId}: ${e.message}`)
+          }
         }
+      } catch (e) {
+        pushLog(`❌ Failed to fetch price for alert: ${e.message}`)
       }
     }
-
-    cachedPromoStatus = currentStatus
 
   } catch (e) {
     // Silent fail

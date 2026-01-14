@@ -1145,7 +1145,7 @@ async function fetchNominalPromo(retryCount = 0) {
   }
 }
 
-// 🎁 PROMO STATUS CHECK (Simplified - hanya update cache)
+// 🎁 PROMO STATUS CHECK + ALERT saat OFF → ON
 let isPromoChecking = false
 let promoCheckCount = 0
 
@@ -1173,10 +1173,56 @@ async function doPromoBroadcast() {
       currentStatus = has20jt ? 'ON' : 'OFF'
     }
 
+    // Detect OFF → ON
+    const statusChangedToOn = cachedPromoStatus !== null && cachedPromoStatus === 'OFF' && currentStatus === 'ON'
     const statusChanged = cachedPromoStatus !== null && cachedPromoStatus !== currentStatus
 
     if (statusChanged) {
       pushLog(`🎁 Status: ${cachedPromoStatus} → ${currentStatus}`)
+    }
+
+    // 🚨 ALERT saat OFF → ON: Kirim notifikasi dengan @tag ke semua subscriber
+    if (statusChangedToOn && subscriptions.size > 0) {
+      pushLog(`🚨 PROMO ON! Sending alerts to ${subscriptions.size} subscribers...`)
+
+      for (const chatId of subscriptions) {
+        try {
+          const isGroup = chatId.endsWith('@g.us')
+          let mentions = []
+
+          if (isGroup) {
+            // Get semua member grup untuk @mention
+            try {
+              const groupMetadata = await sock.groupMetadata(chatId)
+              mentions = groupMetadata.participants.map(p => p.id)
+              pushLog(`👥 Got ${mentions.length} participants from ${chatId.substring(0, 15)}`)
+            } catch (metaErr) {
+              pushLog(`⚠️ Failed to get group metadata: ${metaErr.message}`)
+            }
+
+            // Kirim 3x alert dengan @mention
+            const alertMsg = '🚨🚨🚨 PROMO ON! 🚨🚨🚨'
+            for (let i = 0; i < 3; i++) {
+              try {
+                await sock.sendMessage(chatId, {
+                  text: alertMsg,
+                  mentions: mentions
+                })
+                await new Promise(r => setTimeout(r, 500))
+              } catch (alertErr) {
+                pushLog(`⚠️ Alert ${i+1} failed: ${alertErr.message}`)
+              }
+            }
+            pushLog(`📢 Sent 3 alerts with @mentions to ${chatId.substring(0, 15)}`)
+          } else {
+            // Chat pribadi: kirim 1x saja
+            await sock.sendMessage(chatId, { text: '🚨🚨🚨 PROMO ON! 🚨🚨🚨' })
+          }
+
+        } catch (e) {
+          pushLog(`❌ Failed to send alert to ${chatId}: ${e.message}`)
+        }
+      }
     }
 
     cachedPromoStatus = currentStatus

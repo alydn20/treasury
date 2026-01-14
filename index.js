@@ -1184,9 +1184,9 @@ async function doPromoBroadcast() {
     // Update status dulu sebelum kirim pesan
     cachedPromoStatus = currentStatus
 
-    // 🚨 ALERT saat OFF → ON: Kirim pesan harga dengan @tag ke semua subscriber
+    // 🚨 ALERT saat OFF → ON: Kirim pesan harga (TANPA @mention untuk hindari spam detection)
     if (statusChangedToOn && subscriptions.size > 0) {
-      pushLog(`🚨 PROMO ON! Sending price message with @tag to ${subscriptions.size} subscribers...`)
+      pushLog(`🚨 PROMO ON! Sending price message to ${subscriptions.size} subscribers...`)
 
       try {
         // Fetch harga terkini untuk pesan
@@ -1205,27 +1205,9 @@ async function doPromoBroadcast() {
 
         for (const chatId of subscriptions) {
           try {
-            const isGroup = chatId.endsWith('@g.us')
-            let mentions = []
-
-            if (isGroup) {
-              // Get semua member grup untuk @mention
-              try {
-                const groupMetadata = await sock.groupMetadata(chatId)
-                mentions = groupMetadata.participants.map(p => p.id)
-                pushLog(`👥 Got ${mentions.length} participants from ${chatId.substring(0, 15)}`)
-              } catch (metaErr) {
-                pushLog(`⚠️ Failed to get group metadata: ${metaErr.message}`)
-              }
-            }
-
-            // Kirim pesan harga dengan @mention
-            await sock.sendMessage(chatId, {
-              text: message,
-              mentions: mentions
-            })
-            pushLog(`📢 Sent price message with @tag to ${chatId.substring(0, 15)}`)
-
+            // Kirim pesan harga TANPA @mention (hindari spam detection)
+            await sock.sendMessage(chatId, { text: message })
+            pushLog(`📢 Sent price message to ${chatId.substring(0, 15)}`)
           } catch (e) {
             pushLog(`❌ Failed to send to ${chatId}: ${e.message}`)
           }
